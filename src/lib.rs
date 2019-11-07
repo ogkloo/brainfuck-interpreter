@@ -12,6 +12,7 @@ pub enum Instruction {
     Input,
 }
 
+/// A brainfuck program
 #[derive(Debug, PartialEq)]
 pub struct Tape {
     storage: Vec<(i8, usize)>,

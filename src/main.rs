@@ -1,3 +1,8 @@
+use std::env;
+use std::fs::File;
+use std::io;
+use std::io::prelude::*;
+
 /// List of brainfuck instructions
 /// As detailed in https://esolangs.org/wiki/Brainfuck
 #[derive(Debug, PartialEq)]
@@ -10,6 +15,7 @@ pub enum Instruction {
     End,
     Print,
     Input,
+    Noop,
 }
 
 #[derive(Debug, PartialEq)]
@@ -77,6 +83,32 @@ impl Tape {
                     self.instruction_pointer += 1;
                 }
                 Instruction::Input => {
+                    let mut input = String::new();
+                    match self
+                        .storage
+                        .iter()
+                        .position(|&elem| elem.1 == self.position)
+                    {
+                        Some(index) => match io::stdin().read_line(&mut input) {
+                            Ok(_) => {
+                                self.storage[index].0 = match input.trim().parse::<i8>() {
+                                    Ok(r) => r,
+                                    Err(_) => panic!("Input error (step 1)"),
+                                }
+                            }
+                            Err(_) => panic!("Input error (read line)"),
+                        },
+                        None => match io::stdin().read_line(&mut input) {
+                            Ok(_) => self.storage.push((
+                                match input.trim().parse::<i8>() {
+                                    Ok(r) => r,
+                                    Err(_) => panic!("Input error"),
+                                },
+                                self.position,
+                            )),
+                            Err(_) => panic!("Error parsing input"),
+                        },
+                    }
                     self.instruction_pointer += 1;
                 }
                 Instruction::Branch => {
@@ -105,28 +137,45 @@ impl Tape {
                         },
                     }
                 }
+                Instruction::Noop => {
+                    self.instruction_pointer += 1;
+                }
             }
             true
         }
     }
 }
 
-fn main() {
-    // Infinite loop program
+fn main() -> io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+    let filename = if args.len() == 2 {
+        args[1].clone()
+    } else {
+        "test.b".to_string()
+    };
+    let mut input_file = File::open(&filename)?;
+    let mut program = String::new();
+    input_file.read_to_string(&mut program)?;
     let mut tape = Tape {
         storage: Vec::new(),
         position: 0,
         branches: Vec::new(),
-        instructions: vec![
-            Instruction::Branch,
-            Instruction::Print,
-            Instruction::Add,
-            Instruction::Right,
-            Instruction::Add,
-            Instruction::Sub,
-            Instruction::End,
-        ],
+        instructions: vec![],
         instruction_pointer: 0,
     };
+    for command in program.chars() {
+        tape.instructions.push(match command {
+            '+' => Instruction::Add,
+            '-' => Instruction::Sub,
+            '>' => Instruction::Right,
+            '<' => Instruction::Left,
+            '.' => Instruction::Print,
+            ',' => Instruction::Input,
+            '[' => Instruction::Branch,
+            ']' => Instruction::End,
+            _ => Instruction::Noop,
+        })
+    }
     tape.run();
+    Ok(())
 }
